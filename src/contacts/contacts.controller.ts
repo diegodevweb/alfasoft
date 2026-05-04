@@ -10,6 +10,7 @@ import {
     UseInterceptors,
     UploadedFile,
     BadRequestException,
+    UseGuards,
 } from '@nestjs/common';
 import { ContactsService } from './contacts.service';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -17,6 +18,7 @@ import { diskStorage } from 'multer';
 import { extname } from 'path';
 import { CreateContactDto } from './dto/create-contact.dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto/update-contact.dto';
+import { AuthGuard } from '../auth/auth.guard';
 
 
 @Controller('contacts')
@@ -34,6 +36,7 @@ export class ContactsController {
     }
 
     @Put(':id')
+    @UseGuards(AuthGuard)
     @UseInterceptors(
         FileInterceptor('picture', {
             storage: diskStorage({
@@ -58,6 +61,7 @@ export class ContactsController {
     }
 
     @Post()
+    @UseGuards(AuthGuard)
     @UseInterceptors(
         FileInterceptor('picture', {
             storage: diskStorage({
@@ -84,6 +88,7 @@ export class ContactsController {
 
 
     @Delete(':id')
+    @UseGuards(AuthGuard)
     remove(@Param('id', ParseIntPipe) id: number) {
         return this.contactsService.remove(id);
     }

@@ -23,11 +23,27 @@ const contactId = computed(() => Number(route.params.id));
 const isFormValid = computed(() => {
   return (
     name.value.trim().length >= 6 &&
-    /^\d{9}$/.test(contact.value) &&
+    /^\d{9}$/.test(contact.value.replace(/\D/g, '')) &&
     email.value.trim().length > 0 &&
     (isEditMode.value || picture.value !== null)
   );
 });
+
+function formatContact(value: string) {
+  const digits = value.replace(/\D/g, '').slice(0, 9);
+  const parts = [
+    digits.slice(0, 3),
+    digits.slice(3, 6),
+    digits.slice(6, 9),
+  ].filter(Boolean);
+
+  return parts.join(' ');
+}
+
+function onContactInput(event: Event) {
+  const input = event.target as HTMLInputElement;
+  contact.value = formatContact(input.value);
+}
 
 function onFileChange(event: Event) {
   const input = event.target as HTMLInputElement;
@@ -50,7 +66,7 @@ async function loadContact() {
     const data = response.data;
 
     name.value = data.name;
-    contact.value = data.contact;
+    contact.value = formatContact(data.contact);
     email.value = data.email;
     previewUrl.value = `${API_URL}/uploads/${data.picture}`;
   } catch (error) {
@@ -75,7 +91,7 @@ async function submitForm() {
 
   const formData = new FormData();
   formData.append('name', name.value);
-  formData.append('contact', contact.value);
+  formData.append('contact', contact.value.replace(/\D/g, ''));
   formData.append('email', email.value);
 
   if (picture.value) {
@@ -87,10 +103,16 @@ async function submitForm() {
   try {
     if (isEditMode.value) {
       await api.put(`/contacts/${contactId.value}`, formData);
-      await router.push(`/contacts/${contactId.value}`);
+      await router.push({
+        path: `/contacts/${contactId.value}`,
+        query: { success: 'updated' },
+      });
     } else {
       await api.post('/contacts', formData);
-      await router.push('/');
+      await router.push({
+        path: '/',
+        query: { success: 'created' },
+      });
     }
   } catch (error) {
     if (axios.isAxiosError(error)) {
@@ -162,12 +184,14 @@ onMounted(loadContact);
               v-model="contact"
               type="text"
               class="input input-bordered w-full"
-              placeholder="123456789"
-              pattern="^\d{9}$"
+              placeholder="123 456 789"
+              inputmode="numeric"
+              maxlength="11"
               required
+              @input="onContactInput"
             />
             <div class="label">
-              <span class="label-text-alt">Use exactly 9 digits.</span>
+              <span class="label-text-alt">Use 9 digits. Format shown automatically.</span>
             </div>
           </label>
 

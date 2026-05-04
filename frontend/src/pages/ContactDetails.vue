@@ -1,8 +1,9 @@
 <script setup lang="ts">
 import axios from 'axios';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, useTemplateRef } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { API_URL, api } from '../services/api';
+import { isAuthenticated } from '../services/auth';
 import type { Contact } from '../types/contact';
 
 const route = useRoute();
@@ -12,8 +13,13 @@ const contact = ref<Contact | null>(null);
 const loading = ref(true);
 const deleting = ref(false);
 const errorMessage = ref('');
+const deleteDialog = useTemplateRef<HTMLDialogElement>('deleteDialog');
 
 const contactId = computed(() => Number(route.params.id));
+const successMessage = computed(() =>
+  route.query.success === 'updated' ? 'Contact updated successfully.' : '',
+);
+const authenticated = computed(() => isAuthenticated());
 
 async function loadContact() {
   loading.value = true;
@@ -34,14 +40,16 @@ async function loadContact() {
   }
 }
 
+function openDeleteDialog() {
+  deleteDialog.value?.showModal();
+}
+
+function closeDeleteDialog() {
+  deleteDialog.value?.close();
+}
+
 async function deleteContact() {
   if (!contact.value) {
-    return;
-  }
-
-  const confirmed = window.confirm(`Delete ${contact.value.name}?`);
-
-  if (!confirmed) {
     return;
   }
 
@@ -50,7 +58,8 @@ async function deleteContact() {
 
   try {
     await api.delete(`/contacts/${contact.value.id}`);
-    await router.push('/');
+    closeDeleteDialog();
+    await router.push({ path: '/', query: { success: 'deleted' } });
   } catch (error) {
     if (axios.isAxiosError(error)) {
       const message = error.response?.data?.message;
@@ -83,6 +92,10 @@ onMounted(loadContact);
       {{ errorMessage }}
     </div>
 
+    <div v-if="successMessage" class="alert alert-success mb-6">
+      {{ successMessage }}
+    </div>
+
     <div v-if="loading" class="py-10 text-center">
       <span class="loading loading-spinner loading-lg"></span>
     </div>
@@ -102,6 +115,11 @@ onMounted(loadContact);
 
           <div class="grid gap-4 py-4">
             <div>
+              <p class="text-sm uppercase tracking-wide text-base-content/60">ID</p>
+              <p class="text-lg">{{ contact.id }}</p>
+            </div>
+
+            <div>
               <p class="text-sm uppercase tracking-wide text-base-content/60">Email</p>
               <p class="text-lg">{{ contact.email }}</p>
             </div>
@@ -117,7 +135,7 @@ onMounted(loadContact);
             </div>
           </div>
 
-          <div class="card-actions justify-end">
+          <div v-if="authenticated" class="card-actions justify-end">
             <RouterLink :to="`/contacts/${contact.id}/edit`" class="btn btn-warning">
               Edit
             </RouterLink>
@@ -126,7 +144,7 @@ onMounted(loadContact);
               class="btn btn-error"
               :class="{ 'btn-disabled': deleting }"
               :disabled="deleting"
-              @click="deleteContact"
+              @click="openDeleteDialog"
             >
               <span v-if="deleting" class="loading loading-spinner loading-sm"></span>
               <span>{{ deleting ? 'Deleting...' : 'Delete' }}</span>
@@ -135,5 +153,37 @@ onMounted(loadContact);
         </div>
       </div>
     </div>
+
+    <dialog ref="deleteDialog" class="modal">
+      <div class="modal-box">
+        <h3 class="text-lg font-bold">Delete contact</h3>
+        <p class="py-4">
+          Remove
+          <span class="font-semibold">{{ contact?.name }}</span>
+          permanently?
+        </p>
+
+        <div class="modal-action">
+          <button type="button" class="btn btn-ghost" @click="closeDeleteDialog">
+            Cancel
+          </button>
+
+          <button
+            type="button"
+            class="btn btn-error"
+            :class="{ 'btn-disabled': deleting }"
+            :disabled="deleting"
+            @click="deleteContact"
+          >
+            <span v-if="deleting" class="loading loading-spinner loading-sm"></span>
+            <span>{{ deleting ? 'Deleting...' : 'Delete' }}</span>
+          </button>
+        </div>
+      </div>
+
+      <form method="dialog" class="modal-backdrop">
+        <button>close</button>
+      </form>
+    </dialog>
   </section>
 </template>

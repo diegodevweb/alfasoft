@@ -4,13 +4,36 @@ import {
     NotFoundException,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
-import { PrismaService } from 'src/prisma/prisma.service';
+import { unlink } from 'fs/promises';
+import { join } from 'path';
+import { PrismaService } from '../prisma/prisma.service';
 import { CreateContactDto } from './dto/create-contact.dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto/update-contact.dto';
 
 @Injectable()
 export class ContactsService {
     constructor(private prisma: PrismaService) { }
+
+    private async removePictureFile(filename?: string) {
+        if (!filename) {
+            return;
+        }
+
+        try {
+            await unlink(join(process.cwd(), 'uploads', filename));
+        } catch (error: unknown) {
+            if (
+                typeof error === 'object' &&
+                error !== null &&
+                'code' in error &&
+                error.code === 'ENOENT'
+            ) {
+                return;
+            }
+
+            throw error;
+        }
+    }
 
     async findAll() {
         return this.prisma.contact.findMany({
@@ -39,6 +62,8 @@ export class ContactsService {
                 },
             });
         } catch (error) {
+            await this.removePictureFile(data.picture);
+
             if (
                 error instanceof Prisma.PrismaClientKnownRequestError &&
                 error.code === 'P2002'
@@ -51,21 +76,32 @@ export class ContactsService {
     }
 
     async remove(id: number) {
-        await this.findOne(id);
+        const contact = await this.findOne(id);
         await this.prisma.contact.delete({
             where: { id },
         });
+        await this.removePictureFile(contact.picture);
     }
 
     async update(id: number, data: UpdateContactDto) {
-        await this.findOne(id);
+        const existingContact = await this.findOne(id);
 
         try {
-            return await this.prisma.contact.update({
+            const updatedContact = await this.prisma.contact.update({
                 where: { id },
                 data,
             });
+
+            if (data.picture && data.picture !== existingContact.picture) {
+                await this.removePictureFile(existingContact.picture);
+            }
+
+            return updatedContact;
         } catch (error) {
+            if (data.picture && data.picture !== existingContact.picture) {
+                await this.removePictureFile(data.picture);
+            }
+
             if (
                 error instanceof Prisma.PrismaClientKnownRequestError &&
                 error.code === 'P2002'
